@@ -2,7 +2,7 @@
 """
 update_current_day.py
 Update today's Walmart stock data in Snowflake with live data from Yahoo Finance
-Optimized for GitHub Actions automation
+Now includes market cap data
 """
 
 import yfinance as yf
@@ -59,9 +59,11 @@ def get_yahoo_finance_data():
         latest_data = hist.iloc[-1]
         latest_date = hist.index[-1].strftime('%Y-%m-%d')
         
-        # Get current price (might be different from close if market is open)
+        # Get info including market cap
         info = wmt.info
         current_price = info.get('currentPrice', latest_data['Close'])
+        market_cap = info.get('marketCap', 0)
+        market_cap_billions = market_cap / 1_000_000_000
         
         # Calculate previous close (from the day before)
         if len(hist) >= 2:
@@ -86,7 +88,8 @@ def get_yahoo_finance_data():
             'price_change': round(price_change, 2),
             'price_change_pct': round(price_change_pct, 4),
             'intraday_high': round(latest_data['High'], 2),
-            'intraday_low': round(latest_data['Low'], 2)
+            'intraday_low': round(latest_data['Low'], 2),
+            'market_cap_billions': round(market_cap_billions, 3)  # Store as 785.992
         }
         
         # Calculate moving averages
@@ -103,6 +106,7 @@ def get_yahoo_finance_data():
             data['ma200'] = None
         
         logger.info(f"✅ Retrieved data for {latest_date}: ${current_price:.2f} ({price_change:+.2f}, {price_change_pct:+.2f}%)")
+        logger.info(f"   Market Cap: ${market_cap_billions:.3f}B")
         return data
         
     except Exception as e:
@@ -131,6 +135,13 @@ def update_snowflake(data):
         cursor = conn.cursor()
         logger.info("✅ Connected to Snowflake")
         
+        # Add market cap column if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE WALMART_STOCK_DATA ADD COLUMN IF NOT EXISTS MARKET_CAP_BILLIONS FLOAT")
+            conn.commit()
+        except:
+            pass  # Column already exists
+        
         # Check if record exists for today
         cursor.execute(
             "SELECT UPDATE_COUNT FROM WALMART_STOCK_DATA WHERE DATE = %s",
@@ -158,6 +169,7 @@ def update_snowflake(data):
                     PRICE_CHANGE_PCT = %s,
                     INTRADAY_HIGH = GREATEST(COALESCE(INTRADAY_HIGH, 0), %s),
                     INTRADAY_LOW = LEAST(COALESCE(INTRADAY_LOW, 999999), %s),
+                    MARKET_CAP_BILLIONS = %s,
                     LAST_UPDATE_TIME = CURRENT_TIMESTAMP
                 WHERE DATE = %s
             """, (
@@ -166,6 +178,7 @@ def update_snowflake(data):
                 data['current_price'], update_count,
                 data['previous_close'], data['price_change'], data['price_change_pct'],
                 data['intraday_high'], data['intraday_low'],
+                data['market_cap_billions'],
                 data['date']
             ))
             logger.info(f"✅ Updated record for {data['date']} (update #{update_count})")
@@ -176,14 +189,15 @@ def update_snowflake(data):
                 (DATE, OPEN, HIGH, LOW, CLOSE, VOLUME, MA50, MA200,
                  CURRENT_PRICE, UPDATE_COUNT, IS_LIVE_DATA, PREVIOUS_CLOSE,
                  PRICE_CHANGE, PRICE_CHANGE_PCT, INTRADAY_HIGH, INTRADAY_LOW,
-                 LAST_UPDATE_TIME)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, TRUE, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                 MARKET_CAP_BILLIONS, LAST_UPDATE_TIME)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, TRUE, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (
                 data['date'], data['open'], data['high'], data['low'],
                 data['close'], data['volume'], data['ma50'], data['ma200'],
                 data['current_price'], data['previous_close'],
                 data['price_change'], data['price_change_pct'],
-                data['intraday_high'], data['intraday_low']
+                data['intraday_high'], data['intraday_low'],
+                data['market_cap_billions']
             ))
             logger.info(f"✅ Inserted new record for {data['date']}")
         
@@ -197,6 +211,7 @@ def update_snowflake(data):
         print(f"Change: ${data['price_change']:+.2f} ({data['price_change_pct']:+.2f}%)")
         print(f"Day Range: ${data['low']:.2f} - ${data['high']:.2f}")
         print(f"Volume: {data['volume']:,}")
+        print(f"Market Cap: ${data['market_cap_billions']:.3f}B")
         if data['ma50']:
             print(f"MA50: ${data['ma50']:.2f}")
         if data['ma200']:
