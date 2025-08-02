@@ -1,0 +1,73 @@
+name: Update Walmart Stock Data
+
+on:
+  schedule:
+    # Run every 30 minutes during market hours (9:30 AM - 4:00 PM ET)
+    # GitHub Actions uses UTC time, so we need to convert ET to UTC
+    # 9:30 AM ET = 2:30 PM UTC (during EST) or 1:30 PM UTC (during EDT)
+    # 4:00 PM ET = 9:00 PM UTC (during EST) or 8:00 PM UTC (during EDT)
+    - cron: '*/30 13-21 * * 1-5'  # Every 30 min, 1:30 PM - 9:00 PM UTC, Mon-Fri
+    
+  # Also allow manual trigger
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force update even outside market hours'
+        required: false
+        default: 'false'
+
+jobs:
+  update-stock-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run update script
+      env:
+        SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+        SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+        SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+        SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+        SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      run: |
+        python scripts/update_current_day.py
+    
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: error-logs
+        path: |
+          *.log
+          
+  # Optional: Send notification on failure
+  notify-failure:
+    needs: update-stock-data
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Send notification
+      run: |
+        echo "Stock data update failed at $(date)"
+        # Add your notification logic here (e.g., send email, Slack message, etc.)
