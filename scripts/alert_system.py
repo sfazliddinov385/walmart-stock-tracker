@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import os
 import logging
 import json
+import traceback
 from typing import Dict, List, Optional, Tuple
 
 # Configure logging
@@ -34,7 +35,8 @@ class StockAlertSystem:
         
         self.sender_email = os.environ.get('SENDER_EMAIL')
         self.sender_password = os.environ.get('SENDER_PASSWORD')  # App-specific password for Gmail
-        self.recipient_emails = os.environ.get('RECIPIENT_EMAILS', '').split(',')
+        recipient_str = os.environ.get('RECIPIENT_EMAILS', '')
+        self.recipient_emails = [email.strip() for email in recipient_str.split(',') if email.strip()]
         
         # Alert thresholds (can be customized via environment variables)
         # Fixed: Handle empty strings for all threshold values
@@ -53,6 +55,11 @@ class StockAlertSystem:
         # Track sent alerts to avoid duplicates
         self.alert_history_file = 'alert_history.json'
         self.alert_history = self.load_alert_history()
+        
+        # Log configuration
+        logger.info(f"SMTP Server: {self.smtp_server}:{self.smtp_port}")
+        logger.info(f"Sender Email: {self.sender_email}")
+        logger.info(f"Recipients: {self.recipient_emails}")
         
     def load_alert_history(self) -> Dict:
         """Load alert history from file"""
@@ -341,6 +348,9 @@ class StockAlertSystem:
                 """
         
         # Add key metrics with None handling
+        ma50_display = f"${current.get('ma50', 0):.2f}" if current.get('ma50') else 'N/A'
+        ma200_display = f"${current.get('ma200', 0):.2f}" if current.get('ma200') else 'N/A'
+        
         html += f"""
                 <h3>📊 Key Metrics</h3>
                 <table style="width: 100%; border-collapse: collapse;">
@@ -357,7 +367,7 @@ class StockAlertSystem:
                             <strong>MA50</strong>
                         </td>
                         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
-                            ${current.get('ma50', 0):.2f} if current.get('ma50') else 'N/A'
+                            {ma50_display}
                         </td>
                     </tr>
                     <tr>
@@ -365,7 +375,7 @@ class StockAlertSystem:
                             <strong>MA200</strong>
                         </td>
                         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
-                            ${current.get('ma200', 0):.2f} if current.get('ma200') else 'N/A'
+                            {ma200_display}
                         </td>
                     </tr>
                     <tr>
@@ -404,8 +414,16 @@ class StockAlertSystem:
     
     def send_email(self, alerts: List[Dict], data: Dict):
         """Send email with alerts"""
-        if not self.sender_email or not self.recipient_emails:
-            logger.error("Email configuration missing")
+        if not self.sender_email:
+            logger.error(f"Sender email is missing!")
+            return False
+            
+        if not self.recipient_emails:
+            logger.error(f"Recipient emails are missing!")
+            return False
+            
+        if not self.sender_password:
+            logger.error(f"Sender password is missing!")
             return False
         
         try:
@@ -437,12 +455,33 @@ class StockAlertSystem:
             msg.attach(part1)
             msg.attach(part2)
             
-            # Send email - Fixed connection issue
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.ehlo()  # Identify ourselves to the SMTP server
-            server.starttls()  # Enable encryption
-            server.ehlo()  # Re-identify after starting TLS
+            # Send email with detailed logging and error handling
+            logger.info(f"Attempting to connect to {self.smtp_server}:{self.smtp_port}")
+            
+            # Try different connection methods
+            try:
+                # Method 1: Standard connection
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server.set_debuglevel(0)  # Set to 1 for debug output
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+            except Exception as e:
+                logger.warning(f"Standard connection failed: {e}, trying alternative...")
+                # Method 2: Direct SSL connection
+                try:
+                    import ssl
+                    context = ssl.create_default_context()
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                    server.starttls(context=context)
+                except Exception as e2:
+                    logger.error(f"Alternative connection also failed: {e2}")
+                    raise
+            
+            logger.info(f"Connected to SMTP server, attempting login...")
             server.login(self.sender_email, self.sender_password)
+            logger.info(f"Login successful, sending email...")
+            
             server.send_message(msg)
             server.quit()
             
@@ -456,8 +495,20 @@ class StockAlertSystem:
             
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"❌ Authentication failed: {e}")
+            logger.error("Please check:")
+            logger.error("1. Your email in SENDER_EMAIL secret")
+            logger.error("2. Your app password in SENDER_PASSWORD secret")
+            logger.error("3. That 2-factor auth is enabled on your Gmail")
+            return False
+        except smtplib.SMTPException as e:
+            logger.error(f"❌ SMTP error: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to send email: {e}")
+            logger.error(f"❌ Failed to send email: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(traceback.format_exc())
             return False
     
     def run(self):
