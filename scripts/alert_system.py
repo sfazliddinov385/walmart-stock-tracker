@@ -28,16 +28,27 @@ class StockAlertSystem:
         """Initialize alert system with configuration"""
         # Email configuration
         self.smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+        # Fixed: Handle empty string or missing SMTP_PORT
+        smtp_port_str = os.environ.get('SMTP_PORT', '587')
+        self.smtp_port = int(smtp_port_str) if smtp_port_str and smtp_port_str.strip() else 587
+        
         self.sender_email = os.environ.get('SENDER_EMAIL')
         self.sender_password = os.environ.get('SENDER_PASSWORD')  # App-specific password for Gmail
         self.recipient_emails = os.environ.get('RECIPIENT_EMAILS', '').split(',')
         
         # Alert thresholds (can be customized via environment variables)
-        self.price_change_threshold = float(os.environ.get('PRICE_CHANGE_THRESHOLD', '2.0'))  # %
-        self.volume_spike_threshold = float(os.environ.get('VOLUME_SPIKE_THRESHOLD', '1.5'))  # x average
-        self.rsi_oversold = float(os.environ.get('RSI_OVERSOLD', '30'))
-        self.rsi_overbought = float(os.environ.get('RSI_OVERBOUGHT', '70'))
+        # Fixed: Handle empty strings for all threshold values
+        price_threshold = os.environ.get('PRICE_CHANGE_THRESHOLD', '2.0')
+        self.price_change_threshold = float(price_threshold) if price_threshold and price_threshold.strip() else 2.0
+        
+        volume_threshold = os.environ.get('VOLUME_SPIKE_THRESHOLD', '1.5')
+        self.volume_spike_threshold = float(volume_threshold) if volume_threshold and volume_threshold.strip() else 1.5
+        
+        rsi_oversold_str = os.environ.get('RSI_OVERSOLD', '30')
+        self.rsi_oversold = float(rsi_oversold_str) if rsi_oversold_str and rsi_oversold_str.strip() else 30.0
+        
+        rsi_overbought_str = os.environ.get('RSI_OVERBOUGHT', '70')
+        self.rsi_overbought = float(rsi_overbought_str) if rsi_overbought_str and rsi_overbought_str.strip() else 70.0
         
         # Track sent alerts to avoid duplicates
         self.alert_history_file = 'alert_history.json'
@@ -136,7 +147,7 @@ class StockAlertSystem:
         previous = data['previous'] if data.get('previous') else None
         
         # 1. Large Price Movement Alert
-        if abs(current['price_change_pct']) >= self.price_change_threshold:
+        if current.get('price_change_pct') and abs(current['price_change_pct']) >= self.price_change_threshold:
             direction = 'up' if current['price_change_pct'] > 0 else 'down'
             alerts.append({
                 'type': 'PRICE_MOVEMENT',
@@ -197,13 +208,14 @@ class StockAlertSystem:
             
             # Price vs Moving Averages
             if current_price > current['ma50'] and current_price > current['ma200']:
-                if previous and previous['current_price'] <= previous.get('ma200', 0):
-                    alerts.append({
-                        'type': 'BREAKOUT',
-                        'severity': 'MEDIUM',
-                        'title': '📈 Breakout Above MA200',
-                        'message': f'Price (${current_price:.2f}) broke above MA200 (${current["ma200"]:.2f})'
-                    })
+                if previous and previous.get('current_price') and previous.get('ma200'):
+                    if previous['current_price'] <= previous['ma200']:
+                        alerts.append({
+                            'type': 'BREAKOUT',
+                            'severity': 'MEDIUM',
+                            'title': '📈 Breakout Above MA200',
+                            'message': f'Price (${current_price:.2f}) broke above MA200 (${current["ma200"]:.2f})'
+                        })
         
         # 5. 52-Week High/Low Alerts
         if current.get('pct_from_52w_high') and current['pct_from_52w_high'] >= -1:
@@ -211,18 +223,18 @@ class StockAlertSystem:
                 'type': '52W_HIGH',
                 'severity': 'HIGH',
                 'title': '🎯 Near 52-Week High',
-                'message': f'Price is within 1% of 52-week high (${current["fifty_two_week_high"]:.2f})'
+                'message': f'Price is within 1% of 52-week high (${current.get("fifty_two_week_high", 0):.2f})'
             })
         elif current.get('pct_from_52w_low') and current['pct_from_52w_low'] <= 5:
             alerts.append({
                 'type': '52W_LOW',
                 'severity': 'HIGH',
                 'title': '⚠️ Near 52-Week Low',
-                'message': f'Price is within 5% of 52-week low (${current["fifty_two_week_low"]:.2f})'
+                'message': f'Price is within 5% of 52-week low (${current.get("fifty_two_week_low", 0):.2f})'
             })
         
         # 6. Gap Up/Down Alert
-        if previous and current['open'] != previous['close']:
+        if previous and current.get('open') and previous.get('close'):
             gap_pct = ((current['open'] - previous['close']) / previous['close']) * 100
             if abs(gap_pct) >= 1:  # 1% gap threshold
                 gap_type = 'up' if gap_pct > 0 else 'down'
@@ -257,6 +269,12 @@ class StockAlertSystem:
         high_alerts = [a for a in alerts if a['severity'] == 'HIGH']
         medium_alerts = [a for a in alerts if a['severity'] == 'MEDIUM']
         
+        # Handle None values with defaults
+        current_price = current.get('current_price', 0)
+        price_change = current.get('price_change', 0)
+        price_change_pct = current.get('price_change_pct', 0)
+        volume = current.get('volume', 0)
+        
         html = f"""
         <html>
         <head>
@@ -287,17 +305,17 @@ class StockAlertSystem:
                 <div class="price-info">
                     <div class="metric">
                         <div class="metric-label">Current Price</div>
-                        <div class="metric-value">${current['current_price']:.2f}</div>
+                        <div class="metric-value">${current_price:.2f}</div>
                     </div>
                     <div class="metric">
                         <div class="metric-label">Change</div>
-                        <div class="metric-value" style="color: {'green' if current['price_change'] >= 0 else 'red'};">
-                            {current['price_change']:+.2f} ({current['price_change_pct']:+.2f}%)
+                        <div class="metric-value" style="color: {'green' if price_change >= 0 else 'red'};">
+                            {price_change:+.2f} ({price_change_pct:+.2f}%)
                         </div>
                     </div>
                     <div class="metric">
                         <div class="metric-label">Volume</div>
-                        <div class="metric-value">{current['volume']:,.0f}</div>
+                        <div class="metric-value">{volume:,.0f}</div>
                     </div>
                 </div>
         """
@@ -322,7 +340,7 @@ class StockAlertSystem:
                 </div>
                 """
         
-        # Add key metrics
+        # Add key metrics with None handling
         html += f"""
                 <h3>📊 Key Metrics</h3>
                 <table style="width: 100%; border-collapse: collapse;">
@@ -339,7 +357,7 @@ class StockAlertSystem:
                             <strong>MA50</strong>
                         </td>
                         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
-                            ${current.get('ma50', 0):.2f}
+                            ${current.get('ma50', 0):.2f} if current.get('ma50') else 'N/A'
                         </td>
                     </tr>
                     <tr>
@@ -347,7 +365,7 @@ class StockAlertSystem:
                             <strong>MA200</strong>
                         </td>
                         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
-                            ${current.get('ma200', 0):.2f}
+                            ${current.get('ma200', 0):.2f} if current.get('ma200') else 'N/A'
                         </td>
                     </tr>
                     <tr>
@@ -405,8 +423,8 @@ class StockAlertSystem:
             WALMART STOCK ALERTS
             {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
             
-            Current Price: ${data['current']['current_price']:.2f}
-            Change: {data['current']['price_change']:+.2f} ({data['current']['price_change_pct']:+.2f}%)
+            Current Price: ${data['current'].get('current_price', 0):.2f}
+            Change: {data['current'].get('price_change', 0):+.2f} ({data['current'].get('price_change_pct', 0):+.2f}%)
             
             ALERTS:
             """
@@ -451,8 +469,9 @@ class StockAlertSystem:
             logger.error("Could not fetch stock data")
             return False
         
-        logger.info(f"Current Price: ${data['current']['current_price']:.2f}")
-        logger.info(f"Change: {data['current']['price_change_pct']:+.2f}%")
+        current = data['current']
+        logger.info(f"Current Price: ${current.get('current_price', 0):.2f}")
+        logger.info(f"Change: {current.get('price_change_pct', 0):+.2f}%")
         
         # Check for alerts
         alerts = self.check_alerts(data)
