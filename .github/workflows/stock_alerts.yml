@@ -63,25 +63,29 @@ jobs:
         SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
         SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-        SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-        SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-        SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+        SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE || 'COMPUTE_WH' }}
+        SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE || 'WALMART_STOCK_DB' }}
+        SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA || 'PUBLIC' }}
         
         # Email configuration
         SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
         SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}  # App-specific password
         RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS }}
         
-        # Alert thresholds (optional - will use defaults if not set)
-        PRICE_CHANGE_THRESHOLD: ${{ vars.PRICE_CHANGE_THRESHOLD }}
-        VOLUME_SPIKE_THRESHOLD: ${{ vars.VOLUME_SPIKE_THRESHOLD }}
-        RSI_OVERSOLD: ${{ vars.RSI_OVERSOLD }}
-        RSI_OVERBOUGHT: ${{ vars.RSI_OVERBOUGHT }}
+        # SMTP Configuration - Explicitly set for Gmail
+        SMTP_SERVER: 'smtp.gmail.com'
+        SMTP_PORT: '587'
         
-        # SMTP Configuration (optional - defaults to Gmail)
-        SMTP_SERVER: ${{ vars.SMTP_SERVER }}
-        SMTP_PORT: ${{ vars.SMTP_PORT }}
+        # Alert thresholds - Set explicit defaults
+        PRICE_CHANGE_THRESHOLD: '2.0'
+        VOLUME_SPIKE_THRESHOLD: '1.5'
+        RSI_OVERSOLD: '30'
+        RSI_OVERBOUGHT: '70'
+        
       run: |
+        echo "Starting alert system check..."
+        echo "SMTP Server: smtp.gmail.com:587"
+        echo "Checking for stock alerts..."
         python scripts/alert_system.py
     
     - name: Upload alert history
@@ -91,14 +95,17 @@ jobs:
         name: alert-history-${{ github.run_number }}
         path: alert_history.json
         retention-days: 30
+        if-no-files-found: ignore
     
     - name: Report status
       if: always()
       run: |
-        if [ ${{ job.status }} == 'success' ]; then
+        if [ "${{ job.status }}" == "success" ]; then
           echo "✅ Alert check completed successfully"
+          echo "Check your email for any alerts!"
         else
           echo "❌ Alert check failed"
+          echo "Check the logs above for error details"
         fi
 
   # Optional: Send notification on failure
@@ -110,5 +117,6 @@ jobs:
     - name: Send failure notification
       run: |
         echo "Alert system failed at $(date)"
+        echo "Error occurred in the alert checking process"
         # You can add additional notification logic here
         # For example, send a Slack message or create an issue
