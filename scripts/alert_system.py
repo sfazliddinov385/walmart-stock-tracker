@@ -437,11 +437,14 @@ class StockAlertSystem:
             msg.attach(part1)
             msg.attach(part2)
             
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.sender_email, self.sender_password)
-                server.send_message(msg)
+            # Send email - Fixed connection issue
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            server.ehlo()  # Identify ourselves to the SMTP server
+            server.starttls()  # Enable encryption
+            server.ehlo()  # Re-identify after starting TLS
+            server.login(self.sender_email, self.sender_password)
+            server.send_message(msg)
+            server.quit()
             
             logger.info(f"✅ Email sent successfully to {', '.join(self.recipient_emails)}")
             
