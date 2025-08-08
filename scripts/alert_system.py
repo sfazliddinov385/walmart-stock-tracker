@@ -27,8 +27,9 @@ class StockAlertSystem:
     
     def __init__(self):
         """Initialize alert system with configuration"""
-        # Email configuration
-        self.smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+        # Email configuration - Fixed to handle empty SMTP_SERVER
+        smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+        self.smtp_server = smtp_server if smtp_server and smtp_server.strip() else 'smtp.gmail.com'
         # Fixed: Handle empty string or missing SMTP_PORT
         smtp_port_str = os.environ.get('SMTP_PORT', '587')
         self.smtp_port = int(smtp_port_str) if smtp_port_str and smtp_port_str.strip() else 587
