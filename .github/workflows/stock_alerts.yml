@@ -1,0 +1,114 @@
+name: Stock Alert System
+
+on:
+  schedule:
+    # Run every 15 minutes during market hours for quick alerts
+    - cron: '*/15 13-21 * * 1-5'  # Every 15 min, 1:30 PM - 9:00 PM UTC, Mon-Fri
+    
+    # Daily summary at market close
+    - cron: '0 21 * * 1-5'  # 9:00 PM UTC (4:00 PM ET), Mon-Fri
+    
+    # Morning pre-market check
+    - cron: '0 13 * * 1-5'  # 1:00 PM UTC (9:00 AM ET), Mon-Fri
+    
+  # Manual trigger with options
+  workflow_dispatch:
+    inputs:
+      alert_type:
+        description: 'Type of alert check'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - price_movement
+          - technical_indicators
+          - volume
+      force_send:
+        description: 'Force send alert even if recently sent'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-alerts-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-alerts-
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run alert system
+      env:
+        # Snowflake credentials
+        SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+        SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+        SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+        SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+        SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+        
+        # Email configuration
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}  # App-specific password
+        RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS }}
+        
+        # Alert thresholds (optional - will use defaults if not set)
+        PRICE_CHANGE_THRESHOLD: ${{ vars.PRICE_CHANGE_THRESHOLD }}
+        VOLUME_SPIKE_THRESHOLD: ${{ vars.VOLUME_SPIKE_THRESHOLD }}
+        RSI_OVERSOLD: ${{ vars.RSI_OVERSOLD }}
+        RSI_OVERBOUGHT: ${{ vars.RSI_OVERBOUGHT }}
+        
+        # SMTP Configuration (optional - defaults to Gmail)
+        SMTP_SERVER: ${{ vars.SMTP_SERVER }}
+        SMTP_PORT: ${{ vars.SMTP_PORT }}
+      run: |
+        python scripts/alert_system.py
+    
+    - name: Upload alert history
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: alert-history-${{ github.run_number }}
+        path: alert_history.json
+        retention-days: 30
+    
+    - name: Report status
+      if: always()
+      run: |
+        if [ ${{ job.status }} == 'success' ]; then
+          echo "✅ Alert check completed successfully"
+        else
+          echo "❌ Alert check failed"
+        fi
+
+  # Optional: Send notification on failure
+  notify-failure:
+    needs: check-alerts
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Send failure notification
+      run: |
+        echo "Alert system failed at $(date)"
+        # You can add additional notification logic here
+        # For example, send a Slack message or create an issue

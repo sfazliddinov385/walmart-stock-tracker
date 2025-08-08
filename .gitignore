@@ -1,165 +1,32 @@
-# Environment variables and secrets
+# CRITICAL - Never commit passwords!
 .env
 .env.*
-*.env
-.env.local
-.env.production
-.env.development
-secrets.txt
-credentials.json
-config.ini
 
-# Snowflake specific
-snowflake_config.json
-snowflake_credentials.txt
-.snowsql/
-snowflake_*.txt
-
-# Python
+# Python cache
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.hypothesis/
 *.pyc
 
-# Virtual environments
-bin/
-include/
-Scripts/
-pyvenv.cfg
-pip-selfcheck.json
+# Virtual Environment (if you use one)
+venv/
+env/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb
-
-# IDE specific files
+# IDE settings (if you don't want to share VS Code settings)
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-.project
-.pydevproject
-.settings/
-*.sublime-project
-*.sublime-workspace
 
-# OS specific
+# OS Files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-desktop.ini
 
-# Data files (be careful with sensitive data)
-*.csv
-*.xlsx
-*.xls
-*.json
-*.xml
-*.parquet
-*.feather
-*.pkl
-*.pickle
-
-# But keep specific example files if needed
-!example_data.csv
-!requirements.txt
-!sample_*.csv
-
-# Log files
+# Logs
 *.log
-logs/
-*.log.*
-log/
+
+# Alert tracking (gets recreated automatically)
+alert_history.json
+
+# Backup files
+*.bak
+*.backup
 
 # Temporary files
 *.tmp
-*.temp
-*.bak
-*.backup
-*.old
-~$*
-.~*
-
-# Cache directories
-.cache/
-*.cache
-node_modules/
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Backup files
-backup/
-backups/
-*.backup
-
-# Test outputs
-test_output/
-test_results/
-coverage.xml
-*.cover
-
-# Documentation builds
-docs/_build/
-site/
-
-# Package files
-*.tar.gz
-*.zip
-*.rar
-
-# Sensitive or large data directories
-data/
-raw_data/
-processed_data/
-output/
-results/
-
-# Keep important directories with .gitkeep
-!data/.gitkeep
-!scripts/.gitkeep
-!.github/
-
-# Terraform (if using for infrastructure)
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Other
-.env.example
-TODO.txt
-notes.txt
-scratch.*
+~*
