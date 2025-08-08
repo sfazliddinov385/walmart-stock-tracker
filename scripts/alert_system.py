@@ -13,6 +13,7 @@ import os
 import logging
 import json
 import traceback
+import pytz
 from typing import Dict, List, Optional, Tuple
 
 # Configure logging
@@ -273,6 +274,10 @@ class StockAlertSystem:
         """Format alerts as HTML email"""
         current = data['current']
         
+        # Get Central Time
+        central = pytz.timezone('US/Central')
+        now_central = datetime.now(central)
+        
         # Group alerts by severity
         high_alerts = [a for a in alerts if a['severity'] == 'HIGH']
         medium_alerts = [a for a in alerts if a['severity'] == 'MEDIUM']
@@ -304,12 +309,29 @@ class StockAlertSystem:
         <body>
             <div class="container">
                 <div class="header">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="background: #FFC220; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 24px;">⚡</div>
-                        <div class="walmart-logo">Walmart Stock Alerts</div>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <svg width="50" height="50" viewBox="0 0 50 50" style="flex-shrink: 0;">
+                            <circle cx="25" cy="25" r="25" fill="#FFC220"/>
+                            <g transform="translate(25, 25)">
+                                <!-- Walmart spark/star pattern -->
+                                <rect x="-3" y="-12" width="6" height="8" rx="3" fill="#0071CE"/>
+                                <rect x="-3" y="4" width="6" height="8" rx="3" fill="#0071CE"/>
+                                <rect x="-12" y="-3" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(90 0 0)"/>
+                                <rect x="4" y="-3" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(90 0 0)"/>
+                                <rect x="-10" y="-10" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(45 0 0)"/>
+                                <rect x="4" y="4" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(45 0 0)"/>
+                                <rect x="-10" y="4" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(-45 0 0)"/>
+                                <rect x="4" y="-10" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(-45 0 0)"/>
+                            </g>
+                        </svg>
+                        <div>
+                            <div class="walmart-logo">Walmart Stock Alerts</div>
+                            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">NYSE: WMT</div>
+                        </div>
                     </div>
-                    <div style="font-size: 14px; margin-top: 10px;">
-                        {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+                    <div style="font-size: 14px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-weight: bold;">{now_central.strftime('%A, %B %d, %Y at %I:%M %p')}</div>
+                        <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Central {'Daylight' if now_central.dst() else 'Standard'} Time (C{'D' if now_central.dst() else 'S'}T) • Bentonville, AR</div>
                     </div>
                 </div>
                 
