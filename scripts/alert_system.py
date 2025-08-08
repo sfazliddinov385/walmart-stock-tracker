@@ -289,8 +289,8 @@ class StockAlertSystem:
             <style>
                 body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
                 .container {{ background-color: white; border-radius: 10px; padding: 20px; max-width: 600px; margin: 0 auto; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }}
-                .walmart-logo {{ font-size: 24px; font-weight: bold; }}
+                .header {{ background: linear-gradient(135deg, #0071ce 0%, #005a9c 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }}
+                .walmart-logo {{ font-size: 24px; font-weight: bold; color: white; }}
                 .price-info {{ background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }}
                 .alert-high {{ border-left: 4px solid #dc3545; padding: 10px; margin: 10px 0; background-color: #fff5f5; }}
                 .alert-medium {{ border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; background-color: #fffdf5; }}
@@ -298,13 +298,16 @@ class StockAlertSystem:
                 .metric-label {{ color: #666; font-size: 12px; }}
                 .metric-value {{ font-size: 18px; font-weight: bold; color: #333; }}
                 .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }}
-                .button {{ background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }}
+                .button {{ background-color: #0071ce; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="walmart-logo">🛒 Walmart Stock Alerts</div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="background: #FFC220; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 24px;">⚡</div>
+                        <div class="walmart-logo">Walmart Stock Alerts</div>
+                    </div>
                     <div style="font-size: 14px; margin-top: 10px;">
                         {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
                     </div>
