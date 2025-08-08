@@ -3,7 +3,6 @@ name: Update Walmart Stock Data
 on:
   schedule:
     # Run every 30 minutes during market hours (9:30 AM - 4:00 PM ET)
-    # GitHub Actions uses UTC time, so we need to convert ET to UTC
     # 9:30 AM ET = 2:30 PM UTC (during EST) or 1:30 PM UTC (during EDT)
     # 4:00 PM ET = 9:00 PM UTC (during EST) or 8:00 PM UTC (during EDT)
     - cron: '*/30 13-21 * * 1-5'  # Every 30 min, 1:30 PM - 9:00 PM UTC, Mon-Fri
@@ -22,15 +21,15 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     
     - name: Cache pip packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -55,13 +54,13 @@ jobs:
     
     - name: Upload logs on failure
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: error-logs
         path: |
           *.log
           
-  # Optional: Send notification on failure
+  # Send notification on failure
   notify-failure:
     needs: update-stock-data
     if: failure()
