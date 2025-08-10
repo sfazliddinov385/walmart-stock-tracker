@@ -2,7 +2,7 @@
 
 A real-time automated system I built to monitor Walmart stock prices and send email alerts when important market events occur.
 
-![Dashboard](images/Dashboard.png)
+![Dashboard](images/Dashboard.PNG)
 
 ## Technologies Used
 
@@ -40,7 +40,7 @@ I created this project to automatically track Walmart (WMT) stock without having
 
 ## System Architecture
 
-![System Architecture](images/System_Architecture_Design.png)
+![System Architecture](images/System_Architecture_Design.PNG)
 
 The system consists of five main components working together:
 
@@ -69,13 +69,13 @@ Every 15 minutes, the alert system checks for:
 
 When any condition triggers, I receive an email like this:
 
-![Email Alert](images/Email.png)
+![Email Alert](images/Email.PNG)
 
 ## Automated Workflows
 
 The system uses two GitHub Actions workflows that run on schedule:
 
-![GitHub Actions](images/GitHub_Actions.png)
+![GitHub Actions](images/Github_Actions.PNG)
 
 - **update_stock.yml** - Updates stock data every 30 minutes
 - **alert_system.yml** - Checks for alert conditions every 15 minutes
@@ -84,7 +84,7 @@ The system uses two GitHub Actions workflows that run on schedule:
 
 All historical data is stored in Snowflake with the following information:
 
-![Snowflake Data](images/Snowflake.png)
+![Snowflake Data](images/Snowflake.PNG)
 
 - Daily prices (Open, High, Low, Close)
 - Trading volume
@@ -148,11 +148,11 @@ walmart-stock-tracker/
 │   ├── alert_system.py             # Checks and sends alerts
 │   └── initial_historical_load.py  # One-time historical data import
 ├── images/
-│   ├── Dashboard.png
-│   ├── Email.png
-│   ├── GitHub_Actions.png
-│   ├── Snowflake.png
-│   └── System_Architecture_Design.png
+│   ├── Dashboard.PNG
+│   ├── Email.PNG
+│   ├── Github_Actions.PNG
+│   ├── Snowflake.PNG
+│   └── System_Architecture_Design.PNG
 ├── requirements.txt                # Python dependencies
 └── README.md                       # This file
 ```
