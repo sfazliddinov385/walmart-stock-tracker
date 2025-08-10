@@ -24,6 +24,9 @@
 ![Snowflake](https://img.shields.io/badge/Snowflake-Data_Warehouse-29B5E8?style=for-the-badge&logo=snowflake&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI/CD-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
 
+### Visualization & Reporting
+![Power BI](https://img.shields.io/badge/Power_BI-Real_Time_Dashboard-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)
+
 ### Communication
 ![Gmail](https://img.shields.io/badge/Gmail-SMTP_Alerts-EA4335?style=for-the-badge&logo=gmail&logoColor=white)
 
@@ -40,19 +43,21 @@ I created this project to solve a real problem: staying informed about stock mov
 - **Automated Data Collection**: Fetches stock data every 30 minutes during market hours
 - **Smart Alert System**: Monitors 8 different market conditions and sends instant notifications
 - **Historical Analysis**: Stores and analyzes over 50 years of stock data (13,000+ data points)
+- **Real-Time Dashboard**: Power BI connected directly to Snowflake for live monitoring
 - **Cloud-Native Architecture**: Runs 24/7 using GitHub Actions with 99.9% uptime
 
 ## System Architecture
 
 ![System Architecture](images/System_Architecture_Design.PNG)
 
-The system consists of five integrated components:
+The system consists of six integrated components:
 
 1. **Yahoo Finance API** - Real-time market data source
 2. **GitHub Actions** - Orchestrates automated workflows
 3. **Python Scripts** - Processes data and evaluates alert conditions
 4. **Snowflake Database** - Stores historical data and calculations
-5. **Email Alert System** - Delivers formatted notifications via Gmail
+5. **Power BI Dashboard** - Real-time visualization with DirectQuery to Snowflake
+6. **Email Alert System** - Delivers formatted notifications via Gmail
 
 ## How It Works
 
@@ -97,6 +102,50 @@ Key metrics stored:
 - Market cap and price changes
 - Update timestamps and audit data
 
+## Real-Time Power BI Dashboard
+
+I built an interactive Power BI dashboard that connects directly to Snowflake for real-time stock monitoring:
+
+![Power BI Dashboard](images/Dashboard.PNG)
+
+### Dashboard Components:
+
+**Top Metrics Bar:**
+- **Current Price**: $103.12 with live updates every 30 minutes
+- **Price Change Display**: Visual indicator showing -$0.24 (-23.22%) in red for down days
+- **Volume Today**: 10.46M shares traded
+- **Market Cap**: $822.94B company valuation
+- **Momentum Score**: "Strong Bullish" signal based on technical indicators
+- **Previous Close**: $103.36 for reference
+
+**Visualizations:**
+- **Trading Volume Chart**: 50+ years of historical volume data showing spikes and trends
+- **Price & Moving Averages**: Interactive chart with Close, MA50, and MA200 overlays
+- **Day Range Indicator**: $102.11 - $103.90 showing intraday volatility
+- **52-Week Range**: $65.99 - $104.76 positioning current price in yearly context
+- **Volume Strength**: "Below Avg 0.7x" indicator for unusual trading patterns
+- **RSI Signal**: RSI at 87 with "CAUTION" flag for overbought conditions
+
+### Power BI-Snowflake Integration:
+```dax
+// DirectQuery connection for real-time updates
+let
+   Source = Snowflake.Databases("your-account.snowflakecomputing.com", "COMPUTE_WH"),
+   WALMART_STOCK_DB = Source{[Name="WALMART_STOCK_DB"]}[Data],
+   PUBLIC_Schema = WALMART_STOCK_DB{[Name="PUBLIC"]}[Data],
+   Stock_Data = PUBLIC_Schema{[Name="WALMART_STOCK_DATA"]}[Data]
+in
+   Stock_Data
+```
+
+### Refresh Configuration:
+- **Automatic Refresh**: Every 30 minutes during market hours
+- **DirectQuery Mode**: Ensures data is always current without manual refresh
+- **Row-Level Security**: Configured for different user access levels
+- **Mobile Optimized**: Responsive design for viewing on any device
+
+The dashboard provides executives and traders with instant insights, eliminating the need to query the database directly or wait for reports.
+
 ## Installation
 
 ### Prerequisites
@@ -104,6 +153,7 @@ Key metrics stored:
 - Snowflake account
 - Gmail account with app-specific password
 - GitHub account
+- Power BI Desktop (for dashboard viewing)
 
 ### Setup Steps
 
@@ -140,6 +190,13 @@ Key metrics stored:
   - Navigate to Actions tab
   - Enable workflows when prompted
 
+6. **Set up Power BI Dashboard**
+  - Open Power BI Desktop
+  - Get Data > Snowflake
+  - Enter your Snowflake credentials
+  - Select WALMART_STOCK_DB database
+  - Choose DirectQuery mode for real-time updates
+
 ## Project Structure
 
 ```
@@ -159,6 +216,7 @@ walmart-stock-tracker/
 │   ├── Snowflake.PNG
 │   └── System_Architecture_Design.PNG
 ├── requirements.txt
+├── LICENSE.txt
 └── README.md
 ```
 
@@ -196,9 +254,10 @@ Edit cron expressions in workflow files:
 Track system health through multiple channels:
 
 1. **GitHub Actions Dashboard** - Workflow runs and logs
-2. **Email Notifications** - Alert delivery confirmations
-3. **Snowflake Queries** - Data integrity checks
-4. **Alert History** - JSON audit trail
+2. **Power BI Dashboard** - Real-time stock metrics and trends
+3. **Email Notifications** - Alert delivery confirmations
+4. **Snowflake Queries** - Data integrity checks
+5. **Alert History** - JSON audit trail
 
 ## Troubleshooting Guide
 
@@ -217,11 +276,18 @@ Track system health through multiple channels:
 - Ensure warehouse is running
 - Confirm database exists
 
+### Power BI Connection Issues
+- Check Snowflake account URL
+- Verify DirectQuery settings
+- Ensure warehouse is active
+- Confirm user permissions
+
 ## Performance Metrics
 
 - **Daily Operations**: 48 market updates + 96 alert checks
 - **Data Volume**: 13,000+ historical records
 - **Alert Latency**: <60 seconds from trigger to delivery
+- **Dashboard Refresh**: Real-time via DirectQuery
 - **System Uptime**: 99.9% via GitHub Actions
 - **Storage Footprint**: <10 MB in Snowflake
 
@@ -336,9 +402,10 @@ This project demonstrates enterprise-level data engineering without enterprise c
 - **Saves 10+ hours weekly** of manual stock monitoring
 - **Processes 48 data updates daily** with 99.9% uptime via GitHub Actions
 - **Delivers alerts in under 60 seconds** of market events
+- **Provides real-time visualization** through Power BI dashboard
 - **Scales to unlimited stocks** with minimal code changes
 
-The architecture showcases real-world skills in cloud computing, data pipelines, and automation - exactly what modern tech companies need.
+The architecture showcases real-world skills in cloud computing, data pipelines, business intelligence, and automation - exactly what modern tech companies need.
 
 ## License
 
