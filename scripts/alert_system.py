@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import os
 import logging
 import json
+import traceback
+import pytz
 from typing import Dict, List, Optional, Tuple
 
 # Configure logging
@@ -26,22 +28,40 @@ class StockAlertSystem:
     
     def __init__(self):
         """Initialize alert system with configuration"""
-        # Email configuration
-        self.smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+        # Email configuration - Fixed to handle empty SMTP_SERVER
+        smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+        self.smtp_server = smtp_server if smtp_server and smtp_server.strip() else 'smtp.gmail.com'
+        # Fixed: Handle empty string or missing SMTP_PORT
+        smtp_port_str = os.environ.get('SMTP_PORT', '587')
+        self.smtp_port = int(smtp_port_str) if smtp_port_str and smtp_port_str.strip() else 587
+        
         self.sender_email = os.environ.get('SENDER_EMAIL')
         self.sender_password = os.environ.get('SENDER_PASSWORD')  # App-specific password for Gmail
-        self.recipient_emails = os.environ.get('RECIPIENT_EMAILS', '').split(',')
+        recipient_str = os.environ.get('RECIPIENT_EMAILS', '')
+        self.recipient_emails = [email.strip() for email in recipient_str.split(',') if email.strip()]
         
         # Alert thresholds (can be customized via environment variables)
-        self.price_change_threshold = float(os.environ.get('PRICE_CHANGE_THRESHOLD', '2.0'))  # %
-        self.volume_spike_threshold = float(os.environ.get('VOLUME_SPIKE_THRESHOLD', '1.5'))  # x average
-        self.rsi_oversold = float(os.environ.get('RSI_OVERSOLD', '30'))
-        self.rsi_overbought = float(os.environ.get('RSI_OVERBOUGHT', '70'))
+        # Fixed: Handle empty strings for all threshold values
+        price_threshold = os.environ.get('PRICE_CHANGE_THRESHOLD', '2.0')
+        self.price_change_threshold = float(price_threshold) if price_threshold and price_threshold.strip() else 2.0
+        
+        volume_threshold = os.environ.get('VOLUME_SPIKE_THRESHOLD', '1.5')
+        self.volume_spike_threshold = float(volume_threshold) if volume_threshold and volume_threshold.strip() else 1.5
+        
+        rsi_oversold_str = os.environ.get('RSI_OVERSOLD', '30')
+        self.rsi_oversold = float(rsi_oversold_str) if rsi_oversold_str and rsi_oversold_str.strip() else 30.0
+        
+        rsi_overbought_str = os.environ.get('RSI_OVERBOUGHT', '70')
+        self.rsi_overbought = float(rsi_overbought_str) if rsi_overbought_str and rsi_overbought_str.strip() else 70.0
         
         # Track sent alerts to avoid duplicates
         self.alert_history_file = 'alert_history.json'
         self.alert_history = self.load_alert_history()
+        
+        # Log configuration
+        logger.info(f"SMTP Server: {self.smtp_server}:{self.smtp_port}")
+        logger.info(f"Sender Email: {self.sender_email}")
+        logger.info(f"Recipients: {self.recipient_emails}")
         
     def load_alert_history(self) -> Dict:
         """Load alert history from file"""
@@ -136,7 +156,7 @@ class StockAlertSystem:
         previous = data['previous'] if data.get('previous') else None
         
         # 1. Large Price Movement Alert
-        if abs(current['price_change_pct']) >= self.price_change_threshold:
+        if current.get('price_change_pct') and abs(current['price_change_pct']) >= self.price_change_threshold:
             direction = 'up' if current['price_change_pct'] > 0 else 'down'
             alerts.append({
                 'type': 'PRICE_MOVEMENT',
@@ -197,13 +217,14 @@ class StockAlertSystem:
             
             # Price vs Moving Averages
             if current_price > current['ma50'] and current_price > current['ma200']:
-                if previous and previous['current_price'] <= previous.get('ma200', 0):
-                    alerts.append({
-                        'type': 'BREAKOUT',
-                        'severity': 'MEDIUM',
-                        'title': '📈 Breakout Above MA200',
-                        'message': f'Price (${current_price:.2f}) broke above MA200 (${current["ma200"]:.2f})'
-                    })
+                if previous and previous.get('current_price') and previous.get('ma200'):
+                    if previous['current_price'] <= previous['ma200']:
+                        alerts.append({
+                            'type': 'BREAKOUT',
+                            'severity': 'MEDIUM',
+                            'title': '📈 Breakout Above MA200',
+                            'message': f'Price (${current_price:.2f}) broke above MA200 (${current["ma200"]:.2f})'
+                        })
         
         # 5. 52-Week High/Low Alerts
         if current.get('pct_from_52w_high') and current['pct_from_52w_high'] >= -1:
@@ -211,18 +232,18 @@ class StockAlertSystem:
                 'type': '52W_HIGH',
                 'severity': 'HIGH',
                 'title': '🎯 Near 52-Week High',
-                'message': f'Price is within 1% of 52-week high (${current["fifty_two_week_high"]:.2f})'
+                'message': f'Price is within 1% of 52-week high (${current.get("fifty_two_week_high", 0):.2f})'
             })
         elif current.get('pct_from_52w_low') and current['pct_from_52w_low'] <= 5:
             alerts.append({
                 'type': '52W_LOW',
                 'severity': 'HIGH',
                 'title': '⚠️ Near 52-Week Low',
-                'message': f'Price is within 5% of 52-week low (${current["fifty_two_week_low"]:.2f})'
+                'message': f'Price is within 5% of 52-week low (${current.get("fifty_two_week_low", 0):.2f})'
             })
         
         # 6. Gap Up/Down Alert
-        if previous and current['open'] != previous['close']:
+        if previous and current.get('open') and previous.get('close'):
             gap_pct = ((current['open'] - previous['close']) / previous['close']) * 100
             if abs(gap_pct) >= 1:  # 1% gap threshold
                 gap_type = 'up' if gap_pct > 0 else 'down'
@@ -253,9 +274,19 @@ class StockAlertSystem:
         """Format alerts as HTML email"""
         current = data['current']
         
+        # Get Central Time
+        central = pytz.timezone('US/Central')
+        now_central = datetime.now(central)
+        
         # Group alerts by severity
         high_alerts = [a for a in alerts if a['severity'] == 'HIGH']
         medium_alerts = [a for a in alerts if a['severity'] == 'MEDIUM']
+        
+        # Handle None values with defaults
+        current_price = current.get('current_price', 0)
+        price_change = current.get('price_change', 0)
+        price_change_pct = current.get('price_change_pct', 0)
+        volume = current.get('volume', 0)
         
         html = f"""
         <html>
@@ -263,8 +294,8 @@ class StockAlertSystem:
             <style>
                 body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
                 .container {{ background-color: white; border-radius: 10px; padding: 20px; max-width: 600px; margin: 0 auto; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }}
-                .walmart-logo {{ font-size: 24px; font-weight: bold; }}
+                .header {{ background: linear-gradient(135deg, #0071ce 0%, #005a9c 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }}
+                .walmart-logo {{ font-size: 24px; font-weight: bold; color: white; }}
                 .price-info {{ background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }}
                 .alert-high {{ border-left: 4px solid #dc3545; padding: 10px; margin: 10px 0; background-color: #fff5f5; }}
                 .alert-medium {{ border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; background-color: #fffdf5; }}
@@ -272,32 +303,52 @@ class StockAlertSystem:
                 .metric-label {{ color: #666; font-size: 12px; }}
                 .metric-value {{ font-size: 18px; font-weight: bold; color: #333; }}
                 .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }}
-                .button {{ background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }}
+                .button {{ background-color: #0071ce; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="walmart-logo">🛒 Walmart Stock Alerts</div>
-                    <div style="font-size: 14px; margin-top: 10px;">
-                        {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <svg width="50" height="50" viewBox="0 0 50 50" style="flex-shrink: 0;">
+                            <circle cx="25" cy="25" r="25" fill="#FFC220"/>
+                            <g transform="translate(25, 25)">
+                                <!-- Walmart spark/star pattern -->
+                                <rect x="-3" y="-12" width="6" height="8" rx="3" fill="#0071CE"/>
+                                <rect x="-3" y="4" width="6" height="8" rx="3" fill="#0071CE"/>
+                                <rect x="-12" y="-3" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(90 0 0)"/>
+                                <rect x="4" y="-3" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(90 0 0)"/>
+                                <rect x="-10" y="-10" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(45 0 0)"/>
+                                <rect x="4" y="4" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(45 0 0)"/>
+                                <rect x="-10" y="4" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(-45 0 0)"/>
+                                <rect x="4" y="-10" width="8" height="6" rx="3" fill="#0071CE" transform="rotate(-45 0 0)"/>
+                            </g>
+                        </svg>
+                        <div>
+                            <div class="walmart-logo">Walmart Stock Alerts</div>
+                            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">NYSE: WMT</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 14px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-weight: bold;">{now_central.strftime('%A, %B %d, %Y at %I:%M %p')}</div>
+                        <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Central {'Daylight' if now_central.dst() else 'Standard'} Time (C{'D' if now_central.dst() else 'S'}T) • Bentonville, AR</div>
                     </div>
                 </div>
                 
                 <div class="price-info">
                     <div class="metric">
                         <div class="metric-label">Current Price</div>
-                        <div class="metric-value">${current['current_price']:.2f}</div>
+                        <div class="metric-value">${current_price:.2f}</div>
                     </div>
                     <div class="metric">
                         <div class="metric-label">Change</div>
-                        <div class="metric-value" style="color: {'green' if current['price_change'] >= 0 else 'red'};">
-                            {current['price_change']:+.2f} ({current['price_change_pct']:+.2f}%)
+                        <div class="metric-value" style="color: {'green' if price_change >= 0 else 'red'};">
+                            {price_change:+.2f} ({price_change_pct:+.2f}%)
                         </div>
                     </div>
                     <div class="metric">
                         <div class="metric-label">Volume</div>
-                        <div class="metric-value">{current['volume']:,.0f}</div>
+                        <div class="metric-value">{volume:,.0f}</div>
                     </div>
                 </div>
         """
@@ -322,7 +373,10 @@ class StockAlertSystem:
                 </div>
                 """
         
-        # Add key metrics
+        # Add key metrics with None handling
+        ma50_display = f"${current.get('ma50', 0):.2f}" if current.get('ma50') else 'N/A'
+        ma200_display = f"${current.get('ma200', 0):.2f}" if current.get('ma200') else 'N/A'
+        
         html += f"""
                 <h3>📊 Key Metrics</h3>
                 <table style="width: 100%; border-collapse: collapse;">
@@ -339,7 +393,7 @@ class StockAlertSystem:
                             <strong>MA50</strong>
                         </td>
                         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
-                            ${current.get('ma50', 0):.2f}
+                            {ma50_display}
                         </td>
                     </tr>
                     <tr>
@@ -347,7 +401,7 @@ class StockAlertSystem:
                             <strong>MA200</strong>
                         </td>
                         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
-                            ${current.get('ma200', 0):.2f}
+                            {ma200_display}
                         </td>
                     </tr>
                     <tr>
@@ -386,8 +440,16 @@ class StockAlertSystem:
     
     def send_email(self, alerts: List[Dict], data: Dict):
         """Send email with alerts"""
-        if not self.sender_email or not self.recipient_emails:
-            logger.error("Email configuration missing")
+        if not self.sender_email:
+            logger.error(f"Sender email is missing!")
+            return False
+            
+        if not self.recipient_emails:
+            logger.error(f"Recipient emails are missing!")
+            return False
+            
+        if not self.sender_password:
+            logger.error(f"Sender password is missing!")
             return False
         
         try:
@@ -405,8 +467,8 @@ class StockAlertSystem:
             WALMART STOCK ALERTS
             {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
             
-            Current Price: ${data['current']['current_price']:.2f}
-            Change: {data['current']['price_change']:+.2f} ({data['current']['price_change_pct']:+.2f}%)
+            Current Price: ${data['current'].get('current_price', 0):.2f}
+            Change: {data['current'].get('price_change', 0):+.2f} ({data['current'].get('price_change_pct', 0):+.2f}%)
             
             ALERTS:
             """
@@ -419,11 +481,35 @@ class StockAlertSystem:
             msg.attach(part1)
             msg.attach(part2)
             
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            # Send email with detailed logging and error handling
+            logger.info(f"Attempting to connect to {self.smtp_server}:{self.smtp_port}")
+            
+            # Try different connection methods
+            try:
+                # Method 1: Standard connection
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server.set_debuglevel(0)  # Set to 1 for debug output
+                server.ehlo()
                 server.starttls()
-                server.login(self.sender_email, self.sender_password)
-                server.send_message(msg)
+                server.ehlo()
+            except Exception as e:
+                logger.warning(f"Standard connection failed: {e}, trying alternative...")
+                # Method 2: Direct SSL connection
+                try:
+                    import ssl
+                    context = ssl.create_default_context()
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                    server.starttls(context=context)
+                except Exception as e2:
+                    logger.error(f"Alternative connection also failed: {e2}")
+                    raise
+            
+            logger.info(f"Connected to SMTP server, attempting login...")
+            server.login(self.sender_email, self.sender_password)
+            logger.info(f"Login successful, sending email...")
+            
+            server.send_message(msg)
+            server.quit()
             
             logger.info(f"✅ Email sent successfully to {', '.join(self.recipient_emails)}")
             
@@ -435,8 +521,20 @@ class StockAlertSystem:
             
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"❌ Authentication failed: {e}")
+            logger.error("Please check:")
+            logger.error("1. Your email in SENDER_EMAIL secret")
+            logger.error("2. Your app password in SENDER_PASSWORD secret")
+            logger.error("3. That 2-factor auth is enabled on your Gmail")
+            return False
+        except smtplib.SMTPException as e:
+            logger.error(f"❌ SMTP error: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to send email: {e}")
+            logger.error(f"❌ Failed to send email: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(traceback.format_exc())
             return False
     
     def run(self):
@@ -451,8 +549,9 @@ class StockAlertSystem:
             logger.error("Could not fetch stock data")
             return False
         
-        logger.info(f"Current Price: ${data['current']['current_price']:.2f}")
-        logger.info(f"Change: {data['current']['price_change_pct']:+.2f}%")
+        current = data['current']
+        logger.info(f"Current Price: ${current.get('current_price', 0):.2f}")
+        logger.info(f"Change: {current.get('price_change_pct', 0):+.2f}%")
         
         # Check for alerts
         alerts = self.check_alerts(data)
