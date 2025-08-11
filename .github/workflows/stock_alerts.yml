@@ -1,15 +1,11 @@
 name: Stock Alert System
-
 on:
   schedule:
-    # Run every 15 minutes during market hours for quick alerts
-    - cron: '*/15 13-21 * * 1-5'  # Every 15 min, 1:30 PM - 9:00 PM UTC, Mon-Fri
+    # Run every 3 hours during market hours
+    - cron: '0 13,16,19 * * 1-5'  # 9 AM, 12 PM, 3 PM ET (Mon-Fri)
     
-    # Daily summary at market close
-    - cron: '0 21 * * 1-5'  # 9:00 PM UTC (4:00 PM ET), Mon-Fri
-    
-    # Morning pre-market check
-    - cron: '0 13 * * 1-5'  # 1:00 PM UTC (9:00 AM ET), Mon-Fri
+    # End of day summary
+    - cron: '0 21 * * 1-5'  # 4 PM ET market close (Mon-Fri)
     
   # Manual trigger with options
   workflow_dispatch:
